@@ -1,4 +1,4 @@
-"""Minimal visual system for the Streamlit interface."""
+﻿"""Minimal visual system for the Streamlit interface."""
 
 from __future__ import annotations
 
@@ -1949,45 +1949,36 @@ def render_product_nav(active_page: str = "Practice") -> None:
 
 
 def render_landing_hero() -> None:
-    """Render the landing hero with the custom project illustration."""
-    left, right = st.columns([1, 1], gap="large")
-
-    with left:
-        st.markdown(
-            """
-            <div style="padding:35px 0 30px;">
-                <div style="color:#54d9c5;font-size:.76rem;
-                    font-weight:800;letter-spacing:.16em;margin-bottom:17px;">
-                    AI-POWERED INTERVIEW INTELLIGENCE
-                </div>
-                <h1 style="font-size:clamp(2.5rem,5vw,4rem);
-                    line-height:1.08;letter-spacing:-.06em;
-                    color:#f5f7fa;margin:0 0 20px;">
-                    Don't just practise answers.<br>
-                    <span style="color:#53d7c3;">Defend what you built.</span>
-                </h1>
-                <p style="color:#aab3c1;font-size:1.02rem;
-                    line-height:1.8;max-width:560px;">
-                    Turn your résumé, target role, and actual project code into
-                    a focused interview experience. Practise with questions
-                    tailored to your work and feedback grounded in evidence.
-                </p>
-                <div style="color:#d5e5e3;font-size:.87rem;
-                    font-weight:650;border-left:3px solid #39cbb7;
-                    padding:8px 0 8px 13px;margin-top:20px;">
-                    Your projects become the source of your interview questions.
-                </div>
+    """Render the full-width landing hero section."""
+    st.markdown(
+        """
+        <div style="width:100%;box-sizing:border-box;padding:45px 2% 40px;">
+            <div style="color:#54d9c5;font-size:.76rem;
+                font-weight:800;letter-spacing:.16em;margin-bottom:17px;">
+                AI-POWERED INTERVIEW INTELLIGENCE
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            <h1 style="font-size:clamp(2.5rem,5vw,4rem);
+                line-height:1.08;letter-spacing:-.06em;
+                color:#f5f7fa;margin:0 0 20px;">
+                Don't just practise answers.<br>
+                <span style="color:#53d7c3;">Defend what you built.</span>
+            </h1>
+            <p style="color:#aab3c1;font-size:1.02rem;
+                line-height:1.8;max-width:900px;">
+                Turn your resume, target role, and actual project code into
+                a focused interview experience. Practise with questions
+                tailored to your work and feedback grounded in evidence.
+            </p>
+            <div style="color:#d5e5e3;font-size:.87rem;
+                font-weight:650;border-left:3px solid #39cbb7;
+                padding:8px 0 8px 13px;margin-top:20px;">
+                Your projects become the source of your interview questions.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    with right:
-        image_path = Path(__file__).resolve().parent.parent / "assets" / "interview_coach_hero.png"
-        if image_path.is_file():
-            st.image(str(image_path), use_container_width=True)
-        else:
-            st.warning(f"Hero image not found: {image_path}")
 
 def render_feature_section() -> None:
     """Explain the product's core capabilities."""
@@ -2022,7 +2013,7 @@ def render_feature_section() -> None:
         <div class="capability-grid">
             <div class="capability-card">
                 <div class="capability-index">01 / YOUR PROFILE</div>
-                <h3>Résumé and role intelligence</h3>
+                <h3>Resume and role intelligence</h3>
                 <p>Connect your skills and experience to the role you're preparing for.</p>
             </div>
             <div class="capability-card">
@@ -2070,8 +2061,9 @@ def render_workspace_header(role: str, level: str) -> None:
                 <h1>Your interview workspace</h1>
                 <p>Your preparation plan is ready. Review, practise, and improve.</p>
             </div>
-            <div class="role-pill">{role} · {level}</div>
+            <div class="role-pill">{role} Â· {level}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+

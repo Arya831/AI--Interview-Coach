@@ -1,4 +1,4 @@
-"""Initial-render smoke test for the Streamlit entry point."""
+﻿"""Initial-render smoke test for the Streamlit entry point."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ class StreamlitSmokeTests(unittest.TestCase):
         self.assertEqual(len(app.exception), 0)
         self.assertTrue(
             any(
-                "Prepare for the interview" in block.value
+                "Create your practice plan" in block.value
                 for block in app.markdown
             )
         )
@@ -107,3 +107,4 @@ class StreamlitSmokeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

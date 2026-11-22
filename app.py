@@ -161,7 +161,7 @@ def render_setup_fields(compact=False):
                 """
                 <div class="setup-heading">
                     <h2>Create your practice plan</h2>
-                    <p>Add a rÃ©sumÃ© and choose the interview you want to prepare for.</p>
+                    <p>Add a resume and choose the interview you want to prepare for.</p>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -176,7 +176,7 @@ def render_setup_fields(compact=False):
         with candidate_area:
             if st.session_state.demo_resume_text:
                 uploaded_resume = None
-                st.success("Sample rÃ©sumÃ© selected")
+                st.success("Sample resume selected")
                 st.caption(
                     "Jordan Lee Â· Computer Science student Â· Project coordination"
                 )
@@ -255,7 +255,7 @@ def render_setup_fields(compact=False):
         )
 
         if not resume_is_available:
-            st.caption("Upload a rÃ©sumÃ© or use the sample to continue.")
+            st.caption("Upload a resume or use the sample to continue.")
         elif not st.session_state.target_role.strip():
             st.caption("Enter a target role to continue.")
         elif not has_api_key():
@@ -319,7 +319,7 @@ if plan_ready:
             st.markdown("**Clear this attempt and start again?**")
             st.caption(
                 "Your answers, feedback, and report will be cleared. "
-                "Your rÃ©sumÃ©, target role, and interview questions will stay."
+                "Your resume, target role, and interview questions will stay."
             )
             if st.button(
                 "Clear answers and restart",
@@ -416,7 +416,7 @@ with practice_tab:
             <div class="empty-state">
                 <h3>Your interview is ready to generate</h3>
                 <p>
-                    Create five questions grounded in your rÃ©sumÃ©, experience level,
+                    Create five questions grounded in your resume, experience level,
                     target role, and job description.
                 </p>
             </div>
@@ -1208,7 +1208,7 @@ with project_tab:
 
                 for index, item in enumerate(history, start=1):
                     with st.expander(
-                        f"Answer {index} â€” {item['score']}/10"
+                        f"Answer {index} - {item['score']}/10"
                     ):
                         st.markdown("**Question**")
                         st.write(item["question"])
