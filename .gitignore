@@ -8,3 +8,21 @@ data/
 resumes/*.pdf
 .pytest_cache/
 .coverage
+
+# Local backups and temporary editing scripts
+*.bak
+*.backup
+Downloads/
+app_after_accidental_edit.py
+app_before_ui_redesign.py
+app_final_working_backup.py
+fix_hero_image.py
+fix_path_import.py
+fix_workspace.py
+patch_app.py
+patch_styles.py
+redesign_assessment_panels.py
+redesign_interactive_defence.py
+redesign_project_tab.py
+repair_project_defence.py
+update_hero.py

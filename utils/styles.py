@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from pathlib import Path
 
 
 def _accessibility_enabled_from_url() -> bool:
@@ -1699,6 +1700,100 @@ def inject_global_styles() -> None:
                 flex-direction: column;
             }
         }
+/* ===== Evidence-first product visual identity ===== */
+
+:root {
+    --accent: #36c9b4;
+    --accent-hover: #54ddc9;
+    --success: #56d6a2;
+}
+
+.stApp {
+    background:
+        radial-gradient(
+            circle at 85% 0%,
+            rgba(54, 201, 180, .10),
+            transparent 32rem
+        ),
+        radial-gradient(
+            circle at 0% 45%,
+            rgba(54, 120, 150, .07),
+            transparent 30rem
+        ),
+        var(--bg);
+}
+
+.product-nav {
+    border-bottom: 1px solid rgba(54, 201, 180, .20);
+}
+
+.brand-mark {
+    background: linear-gradient(135deg, #36c9b4, #267d9c) !important;
+    color: #071413 !important;
+    font-weight: 900 !important;
+    box-shadow: 0 0 22px rgba(54, 201, 180, .18);
+}
+
+.nav-link.active {
+    color: #54ddc9 !important;
+    border-bottom-color: #36c9b4 !important;
+}
+
+button[kind="primary"] {
+    background: linear-gradient(135deg, #239c91, #287e9c) !important;
+    border: 1px solid rgba(84, 221, 201, .35) !important;
+    color: #ffffff !important;
+    font-weight: 650 !important;
+}
+
+button[kind="primary"]:hover {
+    background: linear-gradient(135deg, #2bb5a7, #3295b2) !important;
+    box-shadow: 0 5px 22px rgba(54, 201, 180, .15);
+}
+
+[data-testid="stMetric"] {
+    background: rgba(20, 25, 29, .78);
+    border: 1px solid rgba(54, 201, 180, .16);
+    border-radius: 12px;
+    padding: 16px 18px;
+}
+
+[data-testid="stExpander"] {
+    border-color: rgba(54, 201, 180, .15) !important;
+    border-radius: 12px !important;
+}
+
+[data-testid="stFileUploader"] {
+    border: 1px dashed rgba(54, 201, 180, .35);
+    border-radius: 14px;
+    padding: 8px;
+}
+
+.project-hero {
+    padding: 30px 32px;
+    margin: 8px 0 26px;
+    border: 1px solid rgba(54, 201, 180, .23);
+    border-radius: 18px;
+    background: linear-gradient(
+        120deg,
+        rgba(25, 66, 68, .42),
+        rgba(20, 20, 25, .92)
+    );
+}
+
+.project-hero h2 {
+    font-size: clamp(1.8rem, 3vw, 2.7rem);
+    letter-spacing: -.045em;
+    margin: 12px 0;
+}
+
+.project-eyebrow {
+    color: #54ddc9;
+    font-size: .75rem;
+    font-weight: 750;
+    letter-spacing: .16em;
+}
+
         </style>
         """,
         unsafe_allow_html=True,
@@ -1785,13 +1880,14 @@ def render_accessibility_control() -> None:
 
 
 def render_product_nav(active_page: str = "Practice") -> None:
-    """Render the lightweight top product bar and page navigation."""
+    """Render the product navigation."""
     links = []
     accessible_suffix = (
         "?accessibility=1"
         if st.session_state.get("accessibility_mode", False)
         else ""
     )
+
     for label, href in (
         ("Practice", "/"),
         ("How it works", "/How_it_works"),
@@ -1805,9 +1901,43 @@ def render_product_nav(active_page: str = "Practice") -> None:
         )
 
     st.markdown(
+        """
+        <style>
+        .product-nav {
+            display:flex; align-items:center; justify-content:space-between;
+            padding:18px 0 22px; border-bottom:1px solid #292d38;
+            margin-bottom:30px;
+        }
+        .nav-brand {display:flex; align-items:center; gap:11px;
+            font-size:1.05rem; font-weight:750; letter-spacing:-.03em;}
+        .brand-mark {
+            display:grid; place-items:center; width:38px; height:38px;
+            border-radius:12px; background:linear-gradient(135deg,#39d6c0,#168f91);
+            color:#071b1b; font-size:.9rem; font-weight:900;
+            box-shadow:0 5px 22px #24b9aa33;
+        }
+        .nav-links {display:flex; gap:8px; align-items:center;}
+        .nav-link {color:#a7afbd!important; text-decoration:none!important;
+            padding:9px 13px; border-radius:9px; font-size:.88rem;}
+        .nav-link:hover,.nav-link.active {
+            color:#f4f7fa!important; background:#202b35;
+        }
+        @media(max-width:600px) {
+            .product-nav {align-items:flex-start; gap:14px; flex-direction:column;}
+            .nav-links {flex-wrap:wrap;}
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
         f"""
         <div class="product-nav">
-            <div class="nav-brand"><div class="brand-mark">AI</div>Interview Coach</div>
+            <div class="nav-brand">
+                <div class="brand-mark">IC</div>
+                <span>Interview Coach</span>
+            </div>
             <nav class="nav-links" aria-label="Product navigation">
                 {''.join(links)}
             </nav>
@@ -1817,48 +1947,95 @@ def render_product_nav(active_page: str = "Practice") -> None:
     )
 
 
-def render_landing_hero() -> None:
-    """Render a restrained product introduction."""
-    st.markdown(
-        """
-        <section class="hero">
-            <h1>Prepare for the interview <span>you actually want.</span></h1>
-            <p>
-                Turn your résumé and a real job description into focused questions,
-                useful feedback, and a practice plan built around your experience.
-            </p>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
 
+def render_landing_hero() -> None:
+    """Render the landing hero with the custom project illustration."""
+    left, right = st.columns([1, 1], gap="large")
+
+    with left:
+        st.markdown(
+            """
+            <div style="padding:35px 0 30px;">
+                <div style="color:#54d9c5;font-size:.76rem;
+                    font-weight:800;letter-spacing:.16em;margin-bottom:17px;">
+                    AI-POWERED INTERVIEW INTELLIGENCE
+                </div>
+                <h1 style="font-size:clamp(2.5rem,5vw,4rem);
+                    line-height:1.08;letter-spacing:-.06em;
+                    color:#f5f7fa;margin:0 0 20px;">
+                    Don't just practise answers.<br>
+                    <span style="color:#53d7c3;">Defend what you built.</span>
+                </h1>
+                <p style="color:#aab3c1;font-size:1.02rem;
+                    line-height:1.8;max-width:560px;">
+                    Turn your résumé, target role, and actual project code into
+                    a focused interview experience. Practise with questions
+                    tailored to your work and feedback grounded in evidence.
+                </p>
+                <div style="color:#d5e5e3;font-size:.87rem;
+                    font-weight:650;border-left:3px solid #39cbb7;
+                    padding:8px 0 8px 13px;margin-top:20px;">
+                    Your projects become the source of your interview questions.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with right:
+        image_path = Path(__file__).resolve().parent.parent / "assets" / "interview_coach_hero.png"
+        if image_path.is_file():
+            st.image(str(image_path), use_container_width=True)
+        else:
+            st.warning(f"Hero image not found: {image_path}")
 
 def render_feature_section() -> None:
-    """Explain the product without decorative cards."""
+    """Explain the product's core capabilities."""
     st.markdown(
         """
-        <div class="section-intro">
-            <h2>Focused practice, not generic advice.</h2>
-            <p>
-                Your coach connects your background to the role, then helps you
-                improve both what you say and how you communicate it.
-            </p>
+        <style>
+        .capability-intro {margin:30px 0 18px;}
+        .capability-intro h2 {font-size:1.55rem; letter-spacing:-.04em;
+            color:#f1f4f7; margin-bottom:7px;}
+        .capability-intro p {color:#a5afbc; font-size:.92rem;}
+        .capability-grid {
+            display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:14px; margin:18px 0 30px;
+        }
+        .capability-card {
+            background:#151c24; border:1px solid #2c3944;
+            border-radius:14px; padding:20px; min-height:175px;
+        }
+        .capability-index {color:#52d4bf; font-size:.75rem;
+            font-weight:850; letter-spacing:.12em;}
+        .capability-card h3 {color:#edf2f5; font-size:1rem;
+            margin:15px 0 8px;}
+        .capability-card p {color:#a6b0bc; font-size:.84rem; line-height:1.65;}
+        @media(max-width:700px) {
+            .capability-grid {grid-template-columns:1fr;}
+        }
+        </style>
+        <div class="capability-intro">
+            <h2>One workspace. Three layers of preparation.</h2>
+            <p>Move beyond rehearsed answers with preparation connected to your actual work.</p>
         </div>
-        <div class="feature-grid">
-            <div class="feature-item">
-                <span>01</span>
-                <h3>Grounded in your résumé</h3>
-                <p>Questions reference your real skills, projects, and experience.</p>
+        <div class="capability-grid">
+            <div class="capability-card">
+                <div class="capability-index">01 / YOUR PROFILE</div>
+                <h3>Résumé and role intelligence</h3>
+                <p>Connect your skills and experience to the role you're preparing for.</p>
             </div>
-            <div class="feature-item">
-                <span>02</span>
-                <h3>Matched to the role</h3>
-                <p>A job description reveals likely topics, strengths, and gaps.</p>
+            <div class="capability-card">
+                <div class="capability-index">02 / YOUR PROJECT</div>
+                <h3>Evidence-based project defence</h3>
+                <p>Inspect repository contents, distinguish supported claims from gaps,
+                and generate questions about the implementation.</p>
             </div>
-            <div class="feature-item">
-                <span>03</span>
-                <h3>Voice or text feedback</h3>
-                <p>Improve answer structure, clarity, pace, and filler words.</p>
+            <div class="capability-card">
+                <div class="capability-index">03 / YOUR PERFORMANCE</div>
+                <h3>Adaptive answer evaluation</h3>
+                <p>Receive structured feedback, identify knowledge gaps, and practise
+                follow-up questions based on your responses.</p>
             </div>
         </div>
         """,
@@ -1870,10 +2047,28 @@ def render_workspace_header(role: str, level: str) -> None:
     """Render the post-analysis workspace heading."""
     st.markdown(
         f"""
+        <style>
+        .workspace-heading {{
+            display:flex; justify-content:space-between; align-items:center;
+            gap:18px; padding:18px 0 25px; flex-wrap:wrap;
+        }}
+        .workspace-heading h1 {{
+            font-size:2rem; letter-spacing:-.045em;
+            color:#f2f5f7; margin:0 0 7px;
+        }}
+        .workspace-heading p {{
+            color:#a6b1bd; margin:0; font-size:.92rem;
+        }}
+        .role-pill {{
+            border:1px solid #32665e; background:#17352f;
+            color:#80e2cf; padding:9px 13px; border-radius:30px;
+            font-size:.8rem; font-weight:700;
+        }}
+        </style>
         <div class="workspace-heading">
             <div>
-                <h1>Interview preparation</h1>
-                <p>Review your match, practise your answers, and track progress.</p>
+                <h1>Your interview workspace</h1>
+                <p>Your preparation plan is ready. Review, practise, and improve.</p>
             </div>
             <div class="role-pill">{role} · {level}</div>
         </div>

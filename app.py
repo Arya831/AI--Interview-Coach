@@ -1,4 +1,4 @@
-import html
+﻿import html
 import uuid
 
 import pandas as pd
@@ -9,6 +9,12 @@ from utils.database import get_history, initialize_database, save_answer
 from utils.evaluator import evaluate_answer
 from utils.gemini_client import has_api_key
 from utils.pdf_reader import extract_text
+from utils.repository_analyzer import analyze_repository_zip
+from utils.project_evaluator import evaluate_project_evidence
+from utils.project_defence import (
+    evaluate_project_answer,
+    ProjectDefenceError,
+)
 from utils.question_generator import generate_interview_questions
 from utils.report import build_report, report_as_markdown
 from utils.speech import transcribe_audio
@@ -16,6 +22,7 @@ from utils.styles import (
     inject_global_styles,
     render_accessibility_control,
     render_landing_hero,
+    render_feature_section,
     render_product_nav,
     render_workspace_header,
 )
@@ -107,6 +114,17 @@ defaults = {
     "session_id": str(uuid.uuid4()),
     "save_history": False,
     "accessibility_mode": False,
+    "project_analysis": None,
+    "project_evaluation": None,
+    "project_filename": None,
+    "project_defence_questions": [],
+    "project_defence_history": [],
+    "project_defence_current_question": "",
+    "project_defence_base_index": 0,
+    "project_defence_follow_up_count": 0,
+    "project_defence_last_feedback": None,
+    "project_defence_active": False,
+    "project_defence_completed": False,
 }
 for state_key, default_value in defaults.items():
     if state_key not in st.session_state:
@@ -143,7 +161,7 @@ def render_setup_fields(compact=False):
                 """
                 <div class="setup-heading">
                     <h2>Create your practice plan</h2>
-                    <p>Add a résumé and choose the interview you want to prepare for.</p>
+                    <p>Add a rÃ©sumÃ© and choose the interview you want to prepare for.</p>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -158,12 +176,12 @@ def render_setup_fields(compact=False):
         with candidate_area:
             if st.session_state.demo_resume_text:
                 uploaded_resume = None
-                st.success("Sample résumé selected")
+                st.success("Sample rÃ©sumÃ© selected")
                 st.caption(
-                    "Jordan Lee · Computer Science student · Project coordination"
+                    "Jordan Lee Â· Computer Science student Â· Project coordination"
                 )
                 st.button(
-                    "Use my own résumé instead",
+                    "Use my own resume instead",
                     icon=":material/upload_file:",
                     width="stretch",
                     on_click=clear_sample_profile,
@@ -171,7 +189,7 @@ def render_setup_fields(compact=False):
                 )
             else:
                 uploaded_resume = st.file_uploader(
-                    "Résumé",
+                    "resume",
                     type=["pdf", "docx", "txt", "png", "jpg", "jpeg"],
                     key="resume_file",
                     help=(
@@ -180,7 +198,7 @@ def render_setup_fields(compact=False):
                     ),
                 )
                 st.button(
-                    "Use a sample résumé",
+                    "Use a sample resume",
                     icon=":material/person_play:",
                     width="stretch",
                     on_click=load_sample_profile,
@@ -203,7 +221,7 @@ def render_setup_fields(compact=False):
             st.text_area(
                 "Paste the job listing",
                 key="job_description_input",
-                placeholder="Paste responsibilities, skills, and qualifications…",
+                placeholder="Paste responsibilities, skills, and qualificationsâ€¦",
                 height=150,
             )
             uploaded_job = st.file_uploader(
@@ -237,7 +255,7 @@ def render_setup_fields(compact=False):
         )
 
         if not resume_is_available:
-            st.caption("Upload a résumé or use the sample to continue.")
+            st.caption("Upload a rÃ©sumÃ© or use the sample to continue.")
         elif not st.session_state.target_role.strip():
             st.caption("Enter a target role to continue.")
         elif not has_api_key():
@@ -267,15 +285,15 @@ st.markdown(
     f"""
     <div class="workflow" aria-label="Interview practice progress">
       <div class="workflow-step {step_classes[0]}"{step_current[0]}>
-        <span class="workflow-marker"><span class="step-number">1</span><span class="step-check">✓</span></span>
+        <span class="workflow-marker"><span class="step-number">1</span><span class="step-check">âœ“</span></span>
         <span class="workflow-copy"><small>Step 1 of 3</small><span>Build your plan</span></span>
       </div>
       <div class="workflow-step {step_classes[1]}"{step_current[1]}>
-        <span class="workflow-marker"><span class="step-number">2</span><span class="step-check">✓</span></span>
+        <span class="workflow-marker"><span class="step-number">2</span><span class="step-check">âœ“</span></span>
         <span class="workflow-copy"><small>Step 2 of 3</small><span>Practise answers</span></span>
       </div>
       <div class="workflow-step {step_classes[2]}"{step_current[2]}>
-        <span class="workflow-marker"><span class="step-number">3</span><span class="step-check">✓</span></span>
+        <span class="workflow-marker"><span class="step-number">3</span><span class="step-check">âœ“</span></span>
         <span class="workflow-copy"><small>Step 3 of 3</small><span>Review progress</span></span>
       </div>
     </div>
@@ -301,7 +319,7 @@ if plan_ready:
             st.markdown("**Clear this attempt and start again?**")
             st.caption(
                 "Your answers, feedback, and report will be cleared. "
-                "Your résumé, target role, and interview questions will stay."
+                "Your rÃ©sumÃ©, target role, and interview questions will stay."
             )
             if st.button(
                 "Clear answers and restart",
@@ -321,6 +339,7 @@ else:
     uploaded_file, job_description_file, analyze_clicked = render_setup_fields(
         compact=False
     )
+    render_feature_section()
 
 if analyze_clicked:
     with st.spinner("Gemini is analysing your resume..."):
@@ -352,18 +371,19 @@ if analyze_clicked:
 if not st.session_state.resume_summary:
     st.stop()
 
-overview_tab, practice_tab, report_tab = st.tabs(
+overview_tab, practice_tab, report_tab, project_tab = st.tabs(
     [
         ":material/description: Resume overview",
         ":material/record_voice_over: Interview practice",
         ":material/monitoring: Report and progress",
+        ":material/code: Project defence",
     ]
 )
 
 with overview_tab:
     st.subheader("Candidate and role briefing")
     st.caption(
-        f"Built for {st.session_state.target_role} · "
+        f"Built for {st.session_state.target_role} Â· "
         f"{st.session_state.experience_level}"
     )
     st.markdown(st.session_state.resume_summary)
@@ -396,7 +416,7 @@ with practice_tab:
             <div class="empty-state">
                 <h3>Your interview is ready to generate</h3>
                 <p>
-                    Create five questions grounded in your résumé, experience level,
+                    Create five questions grounded in your rÃ©sumÃ©, experience level,
                     target role, and job description.
                 </p>
             </div>
@@ -648,3 +668,577 @@ with report_tab:
                 "Enable local score history in the interview setup to persist this "
                 "session's score trend."
             )
+
+
+with project_tab:
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) {
+            padding-top: 1.4rem;
+        }
+
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) h3,
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) h4 {
+            letter-spacing: -0.035em;
+            font-weight: 700;
+        }
+
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) [data-testid="stMetric"] {
+            background: linear-gradient(145deg, rgba(20, 184, 166, 0.10), rgba(20, 184, 166, 0.025));
+            border: 1px solid rgba(45, 212, 191, 0.22);
+            border-radius: 15px;
+            padding: 17px 18px;
+            min-height: 108px;
+        }
+
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) [data-testid="stMetricLabel"] {
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) [data-testid="stMetricValue"] {
+            font-size: 1.8rem;
+            font-weight: 750;
+        }
+
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) [data-testid="stFileUploader"] section {
+            border: 1px dashed rgba(45, 212, 191, 0.55);
+            border-radius: 16px;
+            background: rgba(20, 184, 166, 0.045);
+            padding: 1.2rem;
+        }
+
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) [data-testid="stAlert"] {
+            border-radius: 13px;
+        }
+
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) [data-testid="stVerticalBlockBorderWrapper"] {
+            border-radius: 15px;
+        }
+
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) .stButton button,
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) .stDownloadButton button {
+            border-radius: 11px;
+            font-weight: 650;
+            min-height: 2.8rem;
+        }
+
+        div[data-testid="stTabPanel"]:has([data-testid="stFileUploader"]) hr {
+            margin-top: 1.7rem;
+            margin-bottom: 1.7rem;
+            border-color: rgba(148, 163, 184, 0.2);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.subheader("AI Project Defence Assessment")
+    st.caption(
+        "Analyse your repository, verify implementation evidence, "
+        "and prepare for technical project defence."
+    )
+
+    st.info(
+        "The analyser inspects supported source files without executing "
+        "the uploaded code."
+    )
+
+    project_zip = st.file_uploader(
+        "Upload your project repository (.zip)",
+        type=["zip"],
+        key="project_zip_file",
+        help="Maximum upload size: 20 MB.",
+    )
+
+    analyse_project_clicked = st.button(
+        "Analyse my project",
+        type="primary",
+        icon=":material/analytics:",
+        disabled=(project_zip is None or not has_api_key()),
+        width="stretch",
+    )
+
+    if not has_api_key():
+        st.warning("Configure Gemini before analysing a project.")
+
+    if analyse_project_clicked and project_zip is not None:
+        st.session_state.project_analysis = None
+        st.session_state.project_evaluation = None
+        st.session_state.project_filename = project_zip.name
+        st.session_state.project_defence_questions = []
+        st.session_state.project_defence_history = []
+        st.session_state.project_defence_current_question = ""
+        st.session_state.project_defence_base_index = 0
+        st.session_state.project_defence_follow_up_count = 0
+        st.session_state.project_defence_last_feedback = None
+        st.session_state.project_defence_active = False
+        st.session_state.project_defence_completed = False
+
+        try:
+            with st.spinner("Inspecting repository files..."):
+                analysis = analyze_repository_zip(project_zip)
+
+            st.session_state.project_analysis = analysis
+
+            with st.spinner("Gemini is evaluating your project evidence..."):
+                evaluation = evaluate_project_evidence(
+                    analysis,
+                    resume_text=st.session_state.resume_text or "",
+                    job_description=(
+                        st.session_state.job_description_text or ""
+                    ),
+                )
+
+            st.session_state.project_evaluation = evaluation
+            st.success("Project analysis completed successfully.")
+
+        except Exception as error:
+            st.error("We could not complete the project analysis.")
+            st.caption(
+                f"Technical detail: {type(error).__name__}: {error}"
+            )
+
+    analysis = st.session_state.project_analysis
+    evaluation = st.session_state.project_evaluation
+
+    if analysis:
+        st.divider()
+        st.markdown("#### Repository overview")
+
+        file_column, source_column = st.columns(2)
+        file_column.metric("Files detected", analysis["file_count"])
+        source_column.metric(
+            "Source files analysed",
+            analysis["source_file_count"],
+        )
+
+        st.write(
+            "**File types detected:**",
+            ", ".join(analysis["extensions"]) or "Not detected",
+        )
+
+        coverage = analysis.get("coverage", {})
+
+        st.markdown("#### Repository analysis coverage")
+
+        coverage_items = [
+            ("Included files", coverage.get("included_files", 0)),
+            ("Analysed source files", coverage.get("analysed_source_files", 0)),
+            ("Ignored files", coverage.get("ignored_files", 0)),
+            ("Oversized files", coverage.get("oversized_files", 0)),
+            ("Non-source files", coverage.get("non_source_files", 0)),
+            ("Unreadable source files", coverage.get("unreadable_source_files", 0)),
+            ("Skipped due to source limit", coverage.get("source_limit_skipped", 0)),
+        ]
+
+        coverage_columns = st.columns(3)
+        for index, (label, value) in enumerate(coverage_items):
+            coverage_columns[index % 3].metric(label, value)
+
+        with st.expander("View repository file list"):
+            st.code("\n".join(analysis["files"]))
+
+    if evaluation:
+        st.divider()
+        st.markdown("#### AI project assessment")
+
+        st.markdown("**Implementation status**")
+        status = evaluation.get(
+            "implementation_status",
+            "Implementation evidence insufficient",
+        )
+        st.info(status)
+
+        st.markdown("**Project summary**")
+        st.write(evaluation["project_summary"])
+
+        st.markdown("**Detected technologies**")
+        st.write(
+            ", ".join(evaluation["detected_technologies"])
+            or "None detected"
+        )
+
+        verified_col, unverified_col = st.columns(2, gap="medium")
+
+        with verified_col.container(border=True):
+            st.markdown("##### Verified components")
+            st.caption("Implementation supported by repository evidence")
+            if evaluation["verified_components"]:
+                for item in evaluation["verified_components"]:
+                    st.markdown(f"- {item}")
+            else:
+                st.caption("No components were verified.")
+
+        with unverified_col.container(border=True):
+            st.markdown("##### Unverified claims")
+            st.caption("Claims that need additional implementation evidence")
+            if evaluation["unverified_claims"]:
+                for item in evaluation["unverified_claims"]:
+                    st.markdown(f"- {item}")
+            else:
+                st.caption("No unverified claims were returned.")
+
+        st.markdown("#### Technical review")
+
+        architecture_col, strengths_col = st.columns(2, gap="medium")
+
+        with architecture_col.container(border=True):
+            st.markdown("##### Architecture observations")
+            if evaluation["architecture_observations"]:
+                for item in evaluation["architecture_observations"]:
+                    st.markdown(f"- {item}")
+            else:
+                st.caption("No architecture observations available.")
+
+        with strengths_col.container(border=True):
+            st.markdown("##### Technical strengths")
+            if evaluation["strengths"]:
+                for item in evaluation["strengths"]:
+                    st.markdown(f"- {item}")
+            else:
+                st.caption("No technical strengths returned.")
+
+        with st.container(border=True):
+            st.markdown("##### Recommended improvements")
+            st.caption("Suggested next steps based on the repository review")
+            if evaluation["improvements"]:
+                for index, item in enumerate(evaluation["improvements"], start=1):
+                    st.markdown(f"**{index}.** {item}")
+            else:
+                st.caption("No additional improvements suggested.")
+
+
+        if evaluation["verified_components"]:
+            for item in evaluation["verified_components"]:
+                st.markdown(f"- {item}")
+        else:
+            st.caption("No components were verified.")
+
+        st.markdown("**Unverified claims**")
+        if evaluation["unverified_claims"]:
+            for item in evaluation["unverified_claims"]:
+                st.markdown(f"- {item}")
+        else:
+            st.caption("No unverified claims were returned.")
+
+        st.markdown("**Architecture observations**")
+        for item in evaluation["architecture_observations"]:
+            st.markdown(f"- {item}")
+
+        st.markdown("**Technical strengths**")
+        for item in evaluation["strengths"]:
+            st.markdown(f"- {item}")
+
+        st.markdown("**Suggested improvements**")
+        for item in evaluation["improvements"]:
+            st.markdown(f"- {item}")
+
+        st.divider()
+        st.markdown("#### Repository-grounded defence questions")
+
+        repository_questions = evaluation.get(
+            "repository_defence_questions",
+            evaluation.get("defence_questions", []),
+        )
+
+        if repository_questions:
+            for index, question in enumerate(repository_questions, start=1):
+                st.markdown(f"**Q{index}.** {question}")
+        else:
+            st.caption("No repository-grounded questions were generated.")
+
+        st.markdown("#### Resume-based defence questions")
+
+        resume_questions = evaluation.get("resume_based_questions", [])
+
+        if resume_questions:
+            for index, question in enumerate(resume_questions, start=1):
+                st.markdown(f"**Q{index}.** {question}")
+        else:
+            st.caption("No additional resume-based questions were generated.")
+
+        st.markdown("**Evidence limitations**")
+        for item in evaluation["evidence_limitations"]:
+            st.markdown(f"- {item}")
+
+        st.markdown("**Overall assessment**")
+        st.write(evaluation["overall_assessment"])
+
+        st.download_button(
+            "Download project assessment",
+            data=__import__("json").dumps(
+                evaluation,
+                indent=2,
+                ensure_ascii=False,
+            ),
+            file_name="project_defence_assessment.json",
+            mime="application/json",
+            icon=":material/download:",
+        )
+
+        st.divider()
+        st.markdown("### Interactive project defence")
+        st.caption(
+            "Answer repository-specific questions. The AI will assess "
+            "your explanation against the uploaded source code and "
+            "adapt its follow-up questions."
+        )
+
+        if not st.session_state.project_defence_questions:
+            available_questions = (
+                evaluation.get("repository_defence_questions", [])
+                or evaluation.get("defence_questions", [])
+            )
+
+            if available_questions:
+                if st.button(
+                    "Start interactive project defence",
+                    type="primary",
+                    icon=":material/play_arrow:",
+                    key="start_project_defence",
+                ):
+                    st.session_state.project_defence_questions = (
+                        available_questions[:3]
+                    )
+                    st.session_state.project_defence_history = []
+                    st.session_state.project_defence_base_index = 0
+                    st.session_state.project_defence_follow_up_count = 0
+                    st.session_state.project_defence_last_feedback = None
+                    st.session_state.project_defence_active = True
+                    st.session_state.project_defence_completed = False
+                    st.session_state.project_defence_current_question = (
+                        available_questions[0]
+                    )
+                    st.rerun()
+            else:
+                st.warning(
+                    "No repository-grounded questions are available "
+                    "for an interactive defence."
+                )
+
+        if st.session_state.project_defence_active:
+            questions = st.session_state.project_defence_questions
+            history = st.session_state.project_defence_history
+            question_index = st.session_state.project_defence_base_index
+            follow_up_count = st.session_state.project_defence_follow_up_count
+
+            progress_value = min(
+                (question_index + 1) / max(len(questions), 1),
+                1.0,
+            )
+
+            progress_col, answered_col = st.columns(2)
+            progress_col.metric(
+                "Interview progress",
+                f"{question_index + 1} / {len(questions)}",
+            )
+            answered_col.metric("Answers submitted", len(history))
+
+            st.progress(
+                progress_value,
+                text=f"Question {question_index + 1} of {len(questions)}",
+            )
+
+            with st.container(border=True):
+                st.caption("LIVE PROJECT DEFENCE")
+                if follow_up_count:
+                    st.markdown("##### Adaptive follow-up question")
+                    st.caption(
+                        f"Follow-up {follow_up_count} of 2 · "
+                        "Generated from your previous answer"
+                    )
+                else:
+                    st.markdown("##### Current interview question")
+                    st.caption("Repository-grounded technical question")
+
+                st.markdown(
+                    f"### {st.session_state.project_defence_current_question}"
+                )
+
+            st.markdown("#### Your response")
+            st.caption(
+                "Explain the implementation, technical decisions and "
+                "how the repository supports your answer."
+            )
+
+            with st.form(
+                key=(
+                    f"project_defence_answer_"
+                    f"{question_index}_"
+                    f"{follow_up_count}"
+                )
+            ):
+                candidate_answer = st.text_area(
+                    "Write your answer",
+                    height=180,
+                    placeholder=(
+                        "Describe your approach, the code involved, "
+                        "why you chose it and any trade-offs..."
+                    ),
+                    label_visibility="collapsed",
+                )
+
+                submitted = st.form_submit_button(
+                    "Evaluate my answer",
+                    type="primary",
+                    width="stretch",
+                    icon=":material/psychology:",
+                )
+
+            if submitted:
+                if not candidate_answer.strip():
+                    st.warning("Please write an answer before submitting.")
+                else:
+                    try:
+                        with st.spinner(
+                            "Evaluating your answer against repository evidence..."
+                        ):
+                            feedback = evaluate_project_answer(
+                                question=(
+                                    st.session_state.project_defence_current_question
+                                ),
+                                answer=candidate_answer,
+                                repository_analysis=analysis,
+                                project_evaluation=evaluation,
+                                history=history,
+                                follow_up_count=(
+                                    st.session_state.project_defence_follow_up_count
+                                ),
+                                max_follow_ups=2,
+                            )
+
+                        history.append({
+                            "question": (
+                                st.session_state.project_defence_current_question
+                            ),
+                            "answer": candidate_answer.strip(),
+                            "score": feedback["score"],
+                            "assessment": feedback["assessment"],
+                            "strengths": feedback["strengths"],
+                            "knowledge_gaps": feedback["knowledge_gaps"],
+                            "evidence_references": (
+                                feedback["evidence_references"]
+                            ),
+                        })
+
+                        st.session_state.project_defence_history = history
+                        st.session_state.project_defence_last_feedback = feedback
+ 
+
+                        if feedback["follow_up_question"]:
+                            st.session_state.project_defence_current_question = (
+                                feedback["follow_up_question"]
+                            )
+                            st.session_state.project_defence_follow_up_count += 1
+                        else:
+                            st.session_state.project_defence_follow_up_count = 0
+                            next_index = question_index + 1
+
+                            if next_index < len(questions):
+                                st.session_state.project_defence_base_index = (
+                                    next_index
+                                )
+                                st.session_state.project_defence_current_question = (
+                                    questions[next_index]
+                                )
+                            else:
+                                st.session_state.project_defence_active = False
+                                st.session_state.project_defence_completed = True
+
+                        st.rerun()
+
+                    except ProjectDefenceError as error:
+                        st.error(str(error))
+                    except Exception as error:
+                        st.error("Could not evaluate this answer.")
+                        st.caption(
+                            f"Technical detail: {type(error).__name__}: {error}"
+                        )
+
+        feedback = st.session_state.project_defence_last_feedback
+
+        if feedback:
+            st.markdown("#### Latest answer feedback")
+            st.metric("Answer score", f"{feedback['score']}/10")
+            st.write(feedback["assessment"])
+
+            if feedback["strengths"]:
+                st.markdown("**Strengths**")
+                for item in feedback["strengths"]:
+                    st.markdown(f"- {item}")
+
+            if feedback["knowledge_gaps"]:
+                st.markdown("**Knowledge gaps**")
+                for item in feedback["knowledge_gaps"]:
+                    st.markdown(f"- {item}")
+
+            if feedback["evidence_references"]:
+                st.markdown("**Repository evidence references**")
+                for item in feedback["evidence_references"]:
+                    st.code(item)
+
+            if feedback["follow_up_question"]:
+                st.caption(
+                    "The next question is adapted from your previous answer."
+                )
+
+        if st.session_state.project_defence_completed:
+            history = st.session_state.project_defence_history
+
+            st.divider()
+            st.markdown("### Final project defence results")
+
+            if history:
+                average_score = sum(
+                    item["score"] for item in history
+                ) / len(history)
+
+                score_column, answer_column = st.columns(2)
+                score_column.metric(
+                    "Average answer score",
+                    f"{average_score:.1f}/10",
+                )
+                answer_column.metric(
+                    "Answers evaluated",
+                    len(history),
+                )
+
+                st.markdown("#### Answer history")
+
+                for index, item in enumerate(history, start=1):
+                    with st.expander(
+                        f"Answer {index} â€” {item['score']}/10"
+                    ):
+                        st.markdown("**Question**")
+                        st.write(item["question"])
+                        st.markdown("**Your answer**")
+                        st.write(item["answer"])
+                        st.markdown("**Assessment**")
+                        st.write(item["assessment"])
+
+                st.download_button(
+                    "Download interactive defence results",
+                    data=__import__("json").dumps(
+                        history,
+                        indent=2,
+                        ensure_ascii=False,
+                    ),
+                    file_name="interactive_project_defence.json",
+                    mime="application/json",
+                    key="download_interactive_defence",
+                )
+
+            if st.button(
+                "Restart project defence",
+                key="restart_project_defence",
+            ):
+                st.session_state.project_defence_questions = []
+                st.session_state.project_defence_history = []
+                st.session_state.project_defence_current_question = ""
+                st.session_state.project_defence_base_index = 0
+                st.session_state.project_defence_follow_up_count = 0
+                st.session_state.project_defence_last_feedback = None
+                st.session_state.project_defence_active = False
+                st.session_state.project_defence_completed = False
+                st.rerun()
